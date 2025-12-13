@@ -76,8 +76,9 @@ class U_DiT_MRCT(U_DiT):
             **kwargs
         )
         
-        # Override out_channels: 8 (4 for mean, 4 for variance if learn_sigma)
-        # We want to predict noise for CT only (4 channels), not for concat input (8 channels)
+        # Override out_channels: in_channels*2 for noise+variance (learn_sigma=True), 
+        # or in_channels for noise only (learn_sigma=False).
+        # For CT latent with 4 channels: 8 output when learn_sigma=True, 4 otherwise.
         self.out_channels = in_channels * 2 if learn_sigma else in_channels
         
         # Recreate final layer with correct output channels
@@ -150,7 +151,7 @@ def load_pretrained_weights(model, pretrained_path, device='cpu'):
             model_weight = model_state_dict[key]
             
             # Handle x_embedder.proj.weight specially (input embedding layer)
-            if 'x_embedder.proj.weight' in key:
+            if key == 'x_embedder.proj.weight':
                 # pretrained_weight shape: (hidden_size, 4, 3, 3)
                 # model_weight shape: (hidden_size, 8, 3, 3)
                 if pretrained_weight.shape != model_weight.shape:

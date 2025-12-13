@@ -177,7 +177,7 @@ def main(args):
             x_input = torch.cat([x, mr_latent], dim=1)  # (N, 8, H/8, W/8)
             return model(x_input, t)
         
-        # Sample using DDPM
+        # Sample using DDPM or DDIM (both methods available in gaussian_diffusion.py)
         if args.use_ddim:
             sampled_latent = diffusion.ddim_sample_loop(
                 model_fn,

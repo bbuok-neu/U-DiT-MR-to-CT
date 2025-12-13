@@ -214,7 +214,7 @@ def validate(model, vae, diffusion, val_loader, device, num_samples=4, num_sampl
                 mr_img = tensor_to_image(mr_gray.squeeze(0), denorm=True)
                 
                 # Create side-by-side image: MR | GT CT | Pred CT
-                h, w = pred_img.size[1], pred_img.size[0]
+                w, h = pred_img.size  # PIL returns (width, height)
                 combined = Image.new('L', (w * 3, h))
                 combined.paste(mr_img, (0, 0))
                 combined.paste(gt_img, (w, 0))
@@ -386,7 +386,8 @@ def main(args):
             model_output = model(model_input, t)
             
             # Compute loss (predict noise)
-            # model_output is (N, 8, H/8, W/8) - first 4 channels are noise pred, last 4 are variance
+            # model_output channels: in_channels*2 when learn_sigma=True (noise + variance),
+            # or in_channels when learn_sigma=False (noise only). With in_channels=4: 8 or 4.
             noise_pred = model_output[:, :4]
             
             # MSE loss on noise prediction
