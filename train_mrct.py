@@ -375,27 +375,23 @@ def main(args):
             # Sample timesteps
             t = torch.randint(0, diffusion.num_timesteps, (ct_latent.shape[0],), device=device)
             
-            # Add noise to CT latent
-            noise = torch.randn_like(ct_latent)
-            noisy_ct = diffusion.q_sample(ct_latent, t, noise=noise)
+            # Create a wrapper model that concatenates MR condition
+            def model_fn(x_t, timesteps, **kwargs):
+                # x_t is the noisy CT latent, concatenate with MR latent
+                x_input = torch.cat([x_t, mr_latent], dim=1)  # (N, 8, H/8, W/8)
+                return model(x_input, timesteps)
             
-            # Concatenate noisy CT with MR condition
-            model_input = torch.cat([noisy_ct, mr_latent], dim=1)  # (N, 8, H/8, W/8)
-            
-            # Forward pass
-            model_output = model(model_input, t)
-            
-            # Compute loss (predict noise)
-            # model_output channels: in_channels*2 when learn_sigma=True (noise + variance),
-            # or in_channels when learn_sigma=False (noise only). With in_channels=4: 8 or 4.
-            noise_pred = model_output[:, :4]
-            
-            # MSE loss on noise prediction
-            loss = torch.mean((noise - noise_pred) ** 2)
+            # Use diffusion training_losses which properly handles noise + variance loss
+            # This is critical for learn_sigma=True to work correctly
+            loss_dict = diffusion.training_losses(model_fn, ct_latent, t, model_kwargs={})
+            loss = loss_dict["loss"].mean()
             
             # Backward pass
             opt.zero_grad()
             accelerator.backward(loss)
+            # Gradient clipping to prevent training instability
+            if args.grad_clip > 0:
+                torch.nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip)
             opt.step()
             update_ema(ema, model)
             
@@ -465,6 +461,8 @@ if __name__ == "__main__":
     parser.add_argument("--epochs", type=int, default=100)
     parser.add_argument("--batch-size", type=int, default=8)
     parser.add_argument("--lr", type=float, default=1e-4)
+    parser.add_argument("--grad-clip", type=float, default=1.0, 
+                        help="Gradient clipping max norm (0 to disable)")
     parser.add_argument("--num-workers", type=int, default=4)
     parser.add_argument("--log-every", type=int, default=100)
     parser.add_argument("--ckpt-every", type=int, default=5000)
