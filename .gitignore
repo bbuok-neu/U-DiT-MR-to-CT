@@ -1,3 +1,6 @@
 pt
 results
 samples
+__pycache__/
+*.pyc
+*.pyo
